@@ -12,7 +12,7 @@ docker compose -f "$ROOT/docker-compose.yml" up -d --build
 
 echo
 echo "waiting for the edge to answer"
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
     if curl -sk --max-time 2 https://localhost:8443/nginx-health >/dev/null; then
         echo "stack is up"
         echo "  site    https://localhost:8443"
