@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 520" width="940" height="520" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="940" height="520" fill="#ffffff"/>
+  <text x="30" y="42" font-size="20" font-weight="600" fill="#111827">ha-web-infrastructure — request path</text>
+  <text x="30" y="64" font-size="13" fill="#6b7280">TLS terminates at the edge, HAProxy load balances two identical app containers</text>
+
+  <rect x="24" y="96" width="470" height="392" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="6 4"/>
+  <text x="40" y="118" font-size="12" font-weight="600" fill="#64748b">docker network: frontend (bridge, published ports)</text>
+
+  <rect x="470" y="96" width="446" height="392" rx="10" fill="#f6faf7" stroke="#bbd8c5" stroke-dasharray="6 4"/>
+  <text x="488" y="118" font-size="12" font-weight="600" fill="#4b7a5d">docker network: backend (internal, unreachable from the host)</text>
+
+  <rect x="48" y="200" width="150" height="80" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="123" y="234" font-size="15" font-weight="600" text-anchor="middle" fill="#1e1b4b">Client</text>
+  <text x="123" y="254" font-size="12" text-anchor="middle" fill="#4338ca">browser / curl</text>
+
+  <rect x="268" y="180" width="176" height="120" rx="8" fill="#e0f2fe" stroke="#0284c7"/>
+  <text x="356" y="210" font-size="15" font-weight="600" text-anchor="middle" fill="#0c4a6e">NGINX</text>
+  <text x="356" y="232" font-size="12" text-anchor="middle" fill="#075985">TLS 1.2 / 1.3</text>
+  <text x="356" y="250" font-size="12" text-anchor="middle" fill="#075985">HSTS + 80 → 443</text>
+  <text x="356" y="272" font-size="11" text-anchor="middle" fill="#0369a1">:8443 published</text>
+
+  <rect x="516" y="180" width="176" height="120" rx="8" fill="#fef3c7" stroke="#d97706"/>
+  <text x="604" y="210" font-size="15" font-weight="600" text-anchor="middle" fill="#78350f">HAProxy</text>
+  <text x="604" y="232" font-size="12" text-anchor="middle" fill="#92400e">round robin</text>
+  <text x="604" y="250" font-size="12" text-anchor="middle" fill="#92400e">httpchk /healthz 2s</text>
+  <text x="604" y="272" font-size="11" text-anchor="middle" fill="#b45309">stats :8404</text>
+
+  <rect x="754" y="140" width="140" height="86" rx="8" fill="#dbeafe" stroke="#2f6feb"/>
+  <text x="824" y="172" font-size="15" font-weight="600" text-anchor="middle" fill="#1e3a8a">web1</text>
+  <text x="824" y="192" font-size="12" text-anchor="middle" fill="#1d4ed8">gunicorn :5000</text>
+  <text x="824" y="210" font-size="11" text-anchor="middle" fill="#1d4ed8">flask app</text>
+
+  <rect x="754" y="262" width="140" height="86" rx="8" fill="#dcfce7" stroke="#1a7f4b"/>
+  <text x="824" y="294" font-size="15" font-weight="600" text-anchor="middle" fill="#14532d">web2</text>
+  <text x="824" y="314" font-size="12" text-anchor="middle" fill="#15803d">gunicorn :5000</text>
+  <text x="824" y="332" font-size="11" text-anchor="middle" fill="#15803d">flask app</text>
+
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <line x1="198" y1="240" x2="262" y2="240" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="230" y="230" font-size="11" text-anchor="middle" fill="#334155">HTTPS</text>
+
+  <line x1="444" y1="240" x2="510" y2="240" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="477" y="230" font-size="11" text-anchor="middle" fill="#334155">HTTP</text>
+
+  <line x1="692" y1="220" x2="748" y2="186" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="692" y1="262" x2="748" y2="300" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="48" y="332" width="396" height="120" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="66" y="358" font-size="12" font-weight="600" fill="#334155">What happens when a backend dies</text>
+  <text x="66" y="382" font-size="12" fill="#475569">1. two failed health checks in a row mark the server DOWN</text>
+  <text x="66" y="402" font-size="12" fill="#475569">2. HAProxy stops sending it traffic (worst case 4 s)</text>
+  <text x="66" y="422" font-size="12" fill="#475569">3. in-flight requests are retried on the surviving node</text>
+  <text x="66" y="442" font-size="12" fill="#475569">4. two good checks after recovery put it back in rotation</text>
+</svg>
