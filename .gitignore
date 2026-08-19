@@ -1,0 +1,6 @@
+certs/*.crt
+certs/*.key
+__pycache__/
+*.pyc
+.env
+docs/last-run.log

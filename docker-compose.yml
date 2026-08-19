@@ -1,0 +1,60 @@
+name: ha-web-infrastructure
+
+services:
+  edge:
+    image: nginx:1.27-alpine
+    container_name: ha-edge
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - balancer
+    networks:
+      - frontend
+    restart: unless-stopped
+
+  balancer:
+    image: haproxy:2.9-alpine
+    container_name: ha-balancer
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "8404:8404"
+    depends_on:
+      - web1
+      - web2
+    networks:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+  web1:
+    build: ./backend
+    container_name: ha-web1
+    environment:
+      NODE_NAME: web1
+      NODE_COLOR: "#2f6feb"
+    networks:
+      - backend
+    restart: unless-stopped
+
+  web2:
+    build: ./backend
+    container_name: ha-web2
+    environment:
+      NODE_NAME: web2
+      NODE_COLOR: "#1a7f4b"
+    networks:
+      - backend
+    restart: unless-stopped
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
