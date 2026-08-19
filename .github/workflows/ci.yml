@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the haproxy configuration
+        run: |
+          docker run --rm \
+            -v "$PWD/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro" \
+            haproxy:2.9-alpine haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg
+
+      - name: Check the compose file
+        run: docker compose config -q
+
+  failover:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bring the stack up
+        run: ./scripts/bootstrap.sh
+
+      - name: The edge configuration has to be valid inside the network
+        run: docker compose exec -T edge nginx -t
+
+      - name: HAProxy has to expose prometheus metrics
+        run: curl -sf http://localhost:8404/metrics | grep -q haproxy_server_status
+
+      - name: Both backends have to serve traffic
+        run: |
+          seen=$(for i in $(seq 1 20); do
+            curl -sk https://localhost:8443/api/whoami | sed -n 's/.*"node":"\([^"]*\)".*/\1/p'
+          done | sort -u | tr '\n' ' ')
+          echo "served by: $seen"
+          echo "$seen" | grep -q web1
+          echo "$seen" | grep -q web2
+
+      - name: Killing a backend must not drop a single request
+        run: |
+          ( sleep 3; docker stop ha-web2 ) &
+          ok=0; bad=0
+          end=$(( $(date +%s) + 12 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            if curl -sk --max-time 3 https://localhost:8443/api/whoami | grep -q '"node"'; then
+              ok=$((ok + 1))
+            else
+              bad=$((bad + 1))
+            fi
+          done
+          echo "$ok requests served, $bad failed"
+          test "$bad" -eq 0
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs

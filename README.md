@@ -1,5 +1,7 @@
 # High availability web stack (NGINX + HAProxy + Docker)
 
+[![ci](https://github.com/Alex-2rios/ha-web-infrastructure/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex-2rios/ha-web-infrastructure/actions/workflows/ci.yml)
+
 A small but complete highly available web tier I put together to understand what actually
 happens when a backend server dies. Everything runs in Docker Compose, so the whole thing
 comes up on a laptop in about a minute.
@@ -90,6 +92,52 @@ what buy that: a request that was already on its way to the dead server gets sen
 one instead of returning a 503. Take those two lines out and rerun the script, the difference is
 obvious.
 
+## Rate limiting
+
+The edge limits each client address to 20 requests per second with a burst of 40, and 20
+concurrent connections. Anything past that gets a 429 rather than being queued, because a queued
+request that eventually times out is worse for everyone than a fast refusal.
+
+```bash
+./scripts/load-test.sh
+REQUESTS=400 CONCURRENCY=60 ./scripts/load-test.sh
+```
+
+The script fires the requests in parallel batches and reports the code distribution:
+
+```
+status codes
+  200    93     served
+  429    27     rate limited by nginx
+
+  requests   120
+  mean       18 ms
+  slowest    33 ms
+```
+
+Those 429s are the limiter doing its job. Turn `limit_req` off in `nginx/conf.d/default.conf`,
+rerun it, and every request gets through, which is exactly what you do not want from an endpoint
+facing the internet.
+
+## Metrics
+
+HAProxy exposes a Prometheus endpoint on the stats port:
+
+```bash
+curl -s http://localhost:8404/metrics | grep haproxy_server_status
+```
+
+That is one line in `haproxy.cfg` (`http-request use-service prometheus-exporter`) and it gives
+you per server up/down, per backend sessions, response codes and check failures. Point the
+Prometheus job from my monitoring repo at `haproxy:8404` and the failover shows up as a graph
+instead of a number in a terminal:
+
+```yaml
+  - job_name: haproxy
+    static_configs:
+      - targets: ["haproxy:8404"]
+```
+
 ## What I learned
 
 - Health check tuning is a tradeoff, not a best practice. `inter 2s fall 2` gives a worst case
@@ -104,9 +152,13 @@ obvious.
   host. Dropping it to 2 s made failures fail fast instead of hanging.
 - Self signed certificates are fine for a lab but `curl` needs `-k` everywhere, which is a good
   reminder of why certificate validation exists.
+- `haproxy -c` fails on a config whose backends are container names, because they do not resolve
+  outside the compose network. `default-server init-addr last,libc,none` lets HAProxy start with
+  a server it cannot resolve yet and pick it up when DNS catches up, which is what you want in
+  containers anyway. That one line is what makes the config checkable in CI.
+- Measuring the rate limiter needs real concurrency. Sequential `curl` calls are slow enough that
+  they never trip a 20 r/s limit, which had me convinced the config was being ignored.
 
 ## Things I'd add next
 
-Keepalived with a floating IP so the edge itself isn't a single point of failure, and shipping
-the HAProxy stats into the Prometheus setup from my monitoring lab instead of eyeballing the
-stats page.
+Keepalived with a floating IP so the edge itself isn't a single point of failure.
