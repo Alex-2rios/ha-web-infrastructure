@@ -159,6 +159,24 @@ instead of a number in a terminal:
 - Measuring the rate limiter needs real concurrency. Sequential `curl` calls are slow enough that
   they never trip a 20 r/s limit, which had me convinced the config was being ignored.
 
+## Working on this
+
+```bash
+make help
+```
+
+The usual ones: `make up, make test, make load, make validate, make down`.
+
+Every push runs the CI workflow described above. A second workflow, `security.yml`, runs weekly
+and on every push: it scans the history for committed secrets with gitleaks, scans the built
+image with Trivy, and checks the compose file for misconfiguration.
+
+Dependabot opens pull requests for the GitHub Actions and the dependencies once a week.
+
+Line endings are pinned to LF through `.gitattributes`, because half of this was written on
+Windows and shell scripts with carriage returns fail on Linux in a way that is genuinely
+confusing the first time.
+
 ## Things I'd add next
 
 Keepalived with a floating IP so the edge itself isn't a single point of failure.
