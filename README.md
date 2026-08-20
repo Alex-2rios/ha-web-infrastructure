@@ -70,6 +70,8 @@ The script runs five phases and writes everything to `docs/last-run.log`:
 A run on my laptop:
 
 ```
+waiting for both backends to join the pool
+
 [1] baseline, both backends healthy
 round robin              web1=8    web2=8    failed=0
 
@@ -80,14 +82,14 @@ web1 draining            web1=0    web2=16   failed=0
 recovered                web1=8    web2=8    failed=0
 
 [4] hard failure: stopping the web2 container mid-traffic
-traffic during kill      ok=51     failed=0
+traffic during kill      served=72     rate limited=0      failed=0
 
 [5] steady state after restart
 final                    web1=8    web2=8    failed=0
 ```
 
-Phase 4 is the number I care about. Fifty one requests spanning the moment a backend was killed,
-none of them failed. The `retries 2` and `option redispatch` lines in `haproxy/haproxy.cfg` are
+Phase 4 is the number I care about. Seventy two requests spanning the moment a backend was
+killed, none of them failed. The `retries 2` and `option redispatch` lines in `haproxy/haproxy.cfg` are
 what buy that: a request that was already on its way to the dead server gets sent to the other
 one instead of returning a 503. Take those two lines out and rerun the script, the difference is
 obvious.
@@ -156,6 +158,13 @@ instead of a number in a terminal:
   outside the compose network. `default-server init-addr last,libc,none` lets HAProxy start with
   a server it cannot resolve yet and pick it up when DNS catches up, which is what you want in
   containers anyway. That one line is what makes the config checkable in CI.
+- A 429 is not an outage, and my first version of the drill counted it as one. Under enough
+  load the rate limiter started refusing requests and the failover test reported hundreds of
+  failures on a stack that was working perfectly. The drill now counts served, rate limited and
+  failed separately, which is the only way the number means anything.
+- Asserting on a system that has not converged yet gives you flaky tests. The first baseline
+  measurement ran before HAProxy had finished its health checks, so it saw one backend and
+  called it a broken split. It now waits for both servers to report UP before measuring.
 - Measuring the rate limiter needs real concurrency. Sequential `curl` calls are slow enough that
   they never trip a 20 r/s limit, which had me convinced the config was being ignored.
 - Dropping `DAC_OVERRIDE` is what taught me what that capability actually does. Root inside a

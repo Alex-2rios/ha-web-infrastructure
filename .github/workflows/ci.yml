@@ -55,16 +55,17 @@ jobs:
       - name: Killing a backend must not drop a single request
         run: |
           ( sleep 3; docker stop ha-web2 ) &
-          ok=0; bad=0
+          ok=0; limited=0; bad=0
           end=$(( $(date +%s) + 12 ))
           while [ "$(date +%s)" -lt "$end" ]; do
-            if curl -sk --max-time 3 https://localhost:8443/api/whoami | grep -q '"node"'; then
-              ok=$((ok + 1))
-            else
-              bad=$((bad + 1))
-            fi
+            code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 3 https://localhost:8443/api/whoami)
+            case "$code" in
+              200) ok=$((ok + 1)) ;;
+              429) limited=$((limited + 1)) ;;
+              *)   bad=$((bad + 1)); echo "unexpected status $code" ;;
+            esac
           done
-          echo "$ok requests served, $bad failed"
+          echo "$ok served, $limited rate limited, $bad failed"
           test "$bad" -eq 0
 
       - name: Logs on failure

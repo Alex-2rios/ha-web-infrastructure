@@ -2,6 +2,7 @@
 set -uo pipefail
 
 BASE_URL="${BASE_URL:-https://localhost:8443}"
+STATS_URL="${STATS_URL:-http://localhost:8404}"
 SAMPLES="${SAMPLES:-20}"
 LOG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/docs/last-run.log"
 
@@ -33,18 +34,47 @@ distribution() {
     printf '%-24s web1=%-4s web2=%-4s failed=%s\n' "$label" "$w1" "$w2" "$err" | tee -a "$LOG"
 }
 
+status() {
+    curl -sk -o /dev/null -w '%{http_code}' --max-time 3 "$BASE_URL/api/whoami"
+}
+
 sustained() {
-    local label="$1" seconds="$2" ok=0 bad=0 deadline
+    local label="$1" seconds="$2" ok=0 limited=0 bad=0 deadline code
     deadline=$(( $(date +%s) + seconds ))
     while [ "$(date +%s)" -lt "$deadline" ]; do
-        if [ -n "$(hit)" ]; then ok=$((ok + 1)); else bad=$((bad + 1)); fi
+        code="$(status)"
+        case "$code" in
+            200) ok=$((ok + 1)) ;;
+            429) limited=$((limited + 1)) ;;
+            *)   bad=$((bad + 1)) ;;
+        esac
     done
-    printf '%-24s ok=%-6s failed=%s\n' "$label" "$ok" "$bad" | tee -a "$LOG"
+    printf '%-24s served=%-6s rate limited=%-6s failed=%s\n' \
+        "$label" "$ok" "$limited" "$bad" | tee -a "$LOG"
+}
+
+wait_for_pool() {
+    local wanted="$1" waited=0 up
+    while [ "$waited" -lt 60 ]; do
+        up="$(curl -s --max-time 2 "$STATS_URL/metrics" \
+            | grep -c 'haproxy_server_status{.*state="UP"} 1' || true)"
+        if [ "$up" -ge "$wanted" ]; then
+            return 0
+        fi
+        sleep 2
+        waited=$((waited + 2))
+    done
+    printf 'only %s of %s backends came up within %ss\n' "$up" "$wanted" "$waited" >&2
+    return 1
 }
 
 say "target      : $BASE_URL"
 say "samples/run : $SAMPLES"
 say "started     : $(date '+%F %T')"
+say ""
+
+say "waiting for both backends to join the pool"
+wait_for_pool 2
 say ""
 
 say "[1] baseline, both backends healthy"
@@ -59,7 +89,7 @@ say ""
 
 say "[3] web1 back in the pool"
 health web1 up
-sleep 6
+wait_for_pool 2
 distribution "recovered"
 say ""
 
@@ -67,7 +97,7 @@ say "[4] hard failure: stopping the web2 container mid-traffic"
 ( sleep 3; docker stop ha-web2 >/dev/null 2>&1 ) &
 sustained "traffic during kill" 12
 docker start ha-web2 >/dev/null 2>&1
-sleep 8
+wait_for_pool 2
 say ""
 
 say "[5] steady state after restart"
