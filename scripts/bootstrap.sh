@@ -12,7 +12,7 @@ docker compose -f "$ROOT/docker-compose.yml" up -d --build
 
 echo
 echo "waiting for the edge to answer"
-for _ in $(seq 1 30); do
+for _ in $(seq 1 60); do
     if curl -sk --max-time 2 https://localhost:8443/nginx-health >/dev/null; then
         echo "stack is up"
         echo "  site    https://localhost:8443"
@@ -22,5 +22,6 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 
-echo "the edge never became ready, check: docker compose logs edge" >&2
+echo "the edge never became ready, here is what it said:" >&2
+docker compose -f "$ROOT/docker-compose.yml" logs --tail 30 edge >&2
 exit 1

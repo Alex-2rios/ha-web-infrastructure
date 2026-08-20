@@ -158,6 +158,15 @@ instead of a number in a terminal:
   containers anyway. That one line is what makes the config checkable in CI.
 - Measuring the rate limiter needs real concurrency. Sequential `curl` calls are slow enough that
   they never trip a 20 r/s limit, which had me convinced the config was being ignored.
+- Dropping `DAC_OVERRIDE` is what taught me what that capability actually does. Root inside a
+  container normally reads any file regardless of its mode, and that is `DAC_OVERRIDE` doing the
+  work. Without it, nginx starting as root could no longer read the `0600` certificate key that
+  the host had created, and the container died on boot with a permission error that looks
+  impossible when you know the process is root. The edge gets that one capability back and keeps
+  every other one dropped.
+- It only failed in CI. On Docker Desktop the bind mount flattens the permissions, so the same
+  compose file worked on my machine and broke on a Linux runner. That is the entire argument for
+  having CI at all.
 
 ## Working on this
 
