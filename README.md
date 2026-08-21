@@ -94,6 +94,17 @@ what buy that: a request that was already on its way to the dead server gets sen
 one instead of returning a 503. Take those two lines out and rerun the script, the difference is
 obvious.
 
+## The backend itself
+
+The two identical app containers are a small Flask app, and it has its own tests: ten of them at
+100% coverage, including the drain endpoint that makes `/healthz` return 503 while the process
+keeps serving traffic. That endpoint is what the failover drill uses to take a node out of the
+pool without killing it, so it is worth having covered.
+
+```bash
+cd backend && pytest
+```
+
 ## Rate limiting
 
 The edge limits each client address to 20 requests per second with a burst of 40, and 20
